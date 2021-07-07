@@ -7,6 +7,7 @@ import { AbstractConstructable } from './types/abstract-constructable.type';
 import { ServiceIdentifier } from './types/service-identifier.type';
 import { ServiceMetadata } from './interfaces/service-metadata.interface';
 import { ServiceOptions } from './interfaces/service-options.interface';
+import { Handler } from './interfaces/handler.interface';
 import { EMPTY_VALUE } from './empty.const';
 
 /**
@@ -18,7 +19,7 @@ export class ContainerInstance {
   public readonly id!: string;
 
   /** All registered services in the container. */
-  private services: ServiceMetadata<unknown>[] = [];
+  private services: Map<ServiceIdentifier, ServiceMetadata<unknown>[]> = new Map();
 
   constructor(id: string) {
     this.id = id;
@@ -148,14 +149,15 @@ export class ContainerInstance {
       ...identifierOrServiceMetadata,
     };
 
-    const service = this.findService(newService.id);
+    let services = this.findAllServices(newService.id);
 
-    if (service && service.multiple !== true) {
-      Object.assign(service, newService);
+    if (services[0] && services[0].multiple !== true) {
+      services = [Object.assign(services[0], newService)];
     } else {
-      this.services.push(newService);
+      services.push(newService);
     }
 
+    this.services.set(newService.id, services);
     if (newService.eager) {
       this.get(newService.id);
     }
@@ -170,13 +172,10 @@ export class ContainerInstance {
     if (Array.isArray(identifierOrIdentifierArray)) {
       identifierOrIdentifierArray.forEach(id => this.remove(id));
     } else {
-      this.services = this.services.filter(service => {
-        if (service.id === identifierOrIdentifierArray) {
-          this.destroyServiceInstance(service);
-          return false;
-        }
-
-        return true;
+      const services = this.services.get(identifierOrIdentifierArray) || [];
+      this.services.delete(identifierOrIdentifierArray);
+      services.forEach(service => {
+        this.destroyServiceInstance(service);
       });
     }
 
@@ -189,11 +188,11 @@ export class ContainerInstance {
   public reset(options: { strategy: 'resetValue' | 'resetServices' } = { strategy: 'resetValue' }): this {
     switch (options.strategy) {
       case 'resetValue':
-        this.services.forEach(service => this.destroyServiceInstance(service));
+        this.services.forEach(services => services.forEach(service => this.destroyServiceInstance(service)));
         break;
       case 'resetServices':
-        this.services.forEach(service => this.destroyServiceInstance(service));
-        this.services = [];
+        this.services.forEach(services => services.forEach(service => this.destroyServiceInstance(service)));
+        this.services.clear();
         break;
       default:
         throw new Error('Received invalid reset strategy.');
@@ -205,14 +204,14 @@ export class ContainerInstance {
    * Returns all services registered with the given identifier.
    */
   private findAllServices(identifier: ServiceIdentifier): ServiceMetadata<unknown>[] {
-    return this.services.filter(service => service.id === identifier);
+    return this.services.get(identifier) || [];
   }
 
   /**
    * Finds registered service in the with a given service identifier.
    */
   private findService(identifier: ServiceIdentifier): ServiceMetadata<unknown> | undefined {
-    return this.services.find(service => service.id === identifier);
+    return (this.services.get(identifier) || [])[0];
   }
 
   /**
@@ -311,8 +310,9 @@ export class ContainerInstance {
    * Initializes all parameter types for a given target service class.
    */
   private initializeParams(target: Function, paramTypes: any[]): unknown[] {
+    const params = this.getHandlers(target, 'params');
     return paramTypes.map((paramType, index) => {
-      const paramHandler = Container.handlers.find(handler => {
+      const paramHandler = params.find(handler => {
         /**
          * @Inject()-ed values are stored as parameter handlers and they reference their target
          * when created. So when a class is extended the @Inject()-ed values are not inherited
@@ -349,14 +349,26 @@ export class ContainerInstance {
    * Applies all registered handlers on a given target class.
    */
   private applyPropertyHandlers(target: Function, instance: { [key: string]: any }) {
-    Container.handlers.forEach(handler => {
-      if (typeof handler.index === 'number') return;
+    const properties = this.getHandlers(target, 'properties');
+    properties.forEach(handler => {
       if (handler.object.constructor !== target && !(target.prototype instanceof handler.object.constructor)) return;
 
       if (handler.propertyName) {
         instance[handler.propertyName] = handler.value(this);
       }
     });
+  }
+
+  private getHandlers(target: Function, key: 'params' | 'properties') {
+    let handlers: Handler[] = [];
+    while (target && target !== Function.prototype) {
+      const handlerObj = Container.handlers.get(target);
+      if (handlerObj) {
+        handlers = handlers.concat(handlerObj[key]);
+      }
+      target = Object.getPrototypeOf(target);
+    }
+    return handlers;
   }
 
   /**

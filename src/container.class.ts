@@ -13,7 +13,7 @@ export class Container {
   /**
    * All registered handlers. The @Inject() decorator uses handlers internally to mark a property for injection.
    **/
-  static readonly handlers: Handler[] = [];
+  static readonly handlers: Map<Function, { params: Handler[]; properties: Handler[] }> = new Map();
 
   /**  Global container instance. */
   private static readonly globalInstance: ContainerInstance = new ContainerInstance('default');
@@ -119,7 +119,28 @@ export class Container {
    * Registers a new handler.
    */
   static registerHandler(handler: Handler): Container {
-    this.handlers.push(handler);
+    const index = handler.index;
+    let handlerObj: { params: Handler[]; properties: Handler[] };
+    if (index !== undefined) {
+      if (this.handlers.has(handler.object)) {
+        handlerObj = this.handlers.get(handler.object)!;
+        handlerObj.params.push(handler);
+      } else {
+        handlerObj = { params: [], properties: [] };
+        handlerObj.params.push(handler);
+      }
+      this.handlers.set(handler.object, handlerObj!);
+      return this;
+    }
+
+    if (this.handlers.has(handler.object.constructor)) {
+      handlerObj = this.handlers.get(handler.object.constructor)!;
+      handlerObj.properties.push(handler);
+    } else {
+      handlerObj = { params: [], properties: [] };
+      handlerObj.properties.push(handler);
+    }
+    this.handlers.set(handler.object.constructor, handlerObj!);
     return this;
   }
 
@@ -128,6 +149,7 @@ export class Container {
    */
   /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   static import(services: Function[]): Container {
+    /* istanbul ignore next */
     return this;
   }
 }

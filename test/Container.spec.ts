@@ -379,4 +379,40 @@ describe('Container', function () {
       expect(() => Container.get(MyService)).toThrowError(ServiceNotFoundError);
     });
   });
+
+  describe('has', function () {
+    it('should has true', function () {
+      class TestService {
+        constructor(public name: string) {}
+      }
+      const testService = new TestService('this is test');
+      Container.set(TestService, testService);
+      expect(Container.has(TestService)).toBe(true);
+    });
+  });
+
+  describe('getMany', function () {
+    it('should getMany success', function () {
+      interface Car {
+        name: string;
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Bmw implements Car {
+        name = 'BMW';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Mercedes implements Car {
+        name = 'Mercedes';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Toyota implements Car {
+        name = 'Toyota';
+      }
+
+      const carNames = Container.getMany('cars').map(car => (car as Car).name);
+      expect(carNames).toContain('BMW');
+      expect(carNames).toContain('Mercedes');
+      expect(carNames).toContain('Toyota');
+    });
+  });
 });

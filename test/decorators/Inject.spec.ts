@@ -107,4 +107,78 @@ describe('Inject Decorator', function () {
     expect(instance).toBeInstanceOf(TestService);
     expect(instance.myClass).toBeInstanceOf(InjectedClass);
   });
+  it('should inject error without identifier or type', function () {
+    function demo() {
+      @Service()
+      class SecondTestService {
+        @Inject(() => undefined)
+        testService: any;
+      }
+      Container.get(SecondTestService);
+    }
+
+    expect(demo).toThrow(
+      `Cannot inject value into "SecondTestService.testService". Please make sure you setup reflect-metadata properly and you don't use interfaces without service tokens as injection value.`
+    );
+  });
+
+  it('should inject many error without identifier or type', function () {
+    function demo() {
+      interface Car {
+        name: string;
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Bmw implements Car {
+        name = 'BMW';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Mercedes implements Car {
+        name = 'Mercedes';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Toyota implements Car {
+        name = 'Toyota';
+      }
+      @Service()
+      class TestServiceWithParameters {
+        constructor(@InjectMany() public cars: any) {}
+      }
+
+      Container.get(TestServiceWithParameters);
+    }
+
+    expect(demo).toThrow(
+      `Cannot inject value into \"Function.undefined\". Please make sure you setup reflect-metadata properly and you don't use interfaces without service tokens as injection value.`
+    );
+  });
+
+  it('should inject many error when identifier callback return undefined', function () {
+    function demo() {
+      interface Car {
+        name: string;
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Bmw implements Car {
+        name = 'BMW';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Mercedes implements Car {
+        name = 'Mercedes';
+      }
+      @Service({ id: 'cars', multiple: true })
+      class Toyota implements Car {
+        name = 'Toyota';
+      }
+      @Service()
+      class TestServiceWithParameters {
+        constructor(@InjectMany(() => undefined) public cars: Car[]) {}
+      }
+
+      Container.get(TestServiceWithParameters);
+    }
+
+    expect(demo).toThrow(
+      `Cannot inject value into \"Function.undefined\". Please make sure you setup reflect-metadata properly and you don't use interfaces without service tokens as injection value.`
+    );
+  });
 });
