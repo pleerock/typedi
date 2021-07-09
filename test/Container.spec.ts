@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Container } from '../src/index';
+import { Constructable, Container } from '../src/index';
 import { Service } from '../src/decorators/service.decorator';
 import { Token } from '../src/token.class';
 import { ServiceNotFoundError } from '../src/error/service-not-found.error';
@@ -210,6 +210,34 @@ describe('Container', function () {
 
       expect(Container.get(ExtraService).badNumber).toBe(888);
       expect(Container.get(ExtraService).byeMessage).toBe('bye world');
+    });
+
+    it('should inject the right value in subclass constructor params', function () {
+      function CustomInject(value: any) {
+        return function (target: Constructable<any>, propertyName: string, index: number) {
+          Container.registerHandler({
+            object: target,
+            propertyName: propertyName,
+            index: index,
+            value: containerInstance => value,
+          });
+        };
+      }
+
+      @Service()
+      class SuperService {
+        constructor(@CustomInject(888) readonly num: number) {}
+      }
+
+      @Service()
+      class SubService extends SuperService {
+        constructor(@CustomInject(666) num: number) {
+          super(num);
+        }
+      }
+
+      expect(Container.get(SuperService).num).toBe(888);
+      expect(Container.get(SubService).num).toBe(666);
     });
   });
 

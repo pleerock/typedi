@@ -412,22 +412,25 @@ export class ContainerInstance {
    */
   private initializeParams(target: Function, paramTypes: any[]): unknown[] {
     return paramTypes.map((paramType, index) => {
-      const paramHandler = this.handlers.find(handler => {
-        /**
-         * @Inject()-ed values are stored as parameter handlers and they reference their target
-         * when created. So when a class is extended the @Inject()-ed values are not inherited
-         * because the handler still points to the old object only.
-         *
-         * As a quick fix a single level parent lookup is added via `Object.getPrototypeOf(target)`,
-         * however this should be updated to a more robust solution.
-         *
-         * TODO: Add proper inheritance handling: either copy the handlers when a class is registered what
-         * TODO: has it's parent already registered as dependency or make the lookup search up to the base Object.
-         */
-        return (
-          (handler.object === target || handler.object === Object.getPrototypeOf(target)) && handler.index === index
-        );
-      });
+      const paramHandler =
+        this.handlers.find(handler => {
+          /**
+           * @Inject()-ed values are stored as parameter handlers and they reference their target
+           * when created. So when a class is extended the @Inject()-ed values are not inherited
+           * because the handler still points to the old object only.
+           *
+           * As a quick fix a single level parent lookup is added via `Object.getPrototypeOf(target)`,
+           * however this should be updated to a more robust solution.
+           *
+           * TODO: Add proper inheritance handling: either copy the handlers when a class is registered what
+           * TODO: has it's parent already registered as dependency or make the lookup search up to the base Object.
+           */
+          return handler.object === target && handler.index === index;
+        }) ||
+        this.handlers.find(handler => {
+          return handler.object === Object.getPrototypeOf(target) && handler.index === index;
+        });
+
       if (paramHandler) return paramHandler.value(this);
 
       if (paramType && paramType.name && !this.isPrimitiveParamType(paramType.name)) {
